@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+# first arg should be similar to:
+# ${GOPATH}/src/github.com/someone/someproject/some.proto
+
+# this script assumes that protoc, elm-protobuf, and elm-format are installed properly
+
+function main {
+    echo ${1}
+    local prtFile=${1}
+    local tmpFile="./$(basename ${1})"
+    local elmFile=${tmpFile/proto/elm}
+
+    # filename components/validation
+    local prtBasename=$(basename ${prtFile})
+    local prtExt=${prtBasename##*.}
+    [[ "${prtExt}" != "proto" ]] && echo "first arg must be a proto file" >&2 && exit 1
+
+    # cleanup
+    function finish {
+        rm ${1}
+    }
+    trap "finish ${tmpFile}" EXIT
+
+    # pre-process proto file
+    cat ${prtFile} | \
+        # delete consecutive empty lines (simplifies multi-line empty message deletion)
+        gsed '/^$/N;/^\n$/D' | \
+        # delete service definitions
+        gsed '/^service/,/^}$/d' | \
+        # delete annotations.proto (contains proto2 dependency)
+        gsed '/annotations.proto/d' | \
+        # delete empty messages (single line)
+        gsed '/^message.*{\s*}/d' | \
+        # delete empty messages (multiple lines)
+        gsed '/^message.*/ {N;N; /^message.*{[\s|\n]*\}/d}' | \
+        # delete consecutive empty lines (again, some have likely been created)
+        gsed '/^$/N;/^\n$/D' | \
+        # delete last line if empty
+        gsed '${/^$/d}' \
+        >> ${tmpFile}
+
+    protoc -I$(dirname ${tmpFile}) --elm_out=logtostderr=true:. ${tmpFile}
+
+    elm-format --yes ${elmFile}
+}
+
+# ensure first arg is provided
+[[ "${1}" == "" ]] && echo "first arg must not be empty" >&2 && exit 1
+
+for f in "$@"
+do
+    main $f
+done
+# main ${1}
