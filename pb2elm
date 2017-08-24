@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+# original author: https://github.com/daved
 # first arg should be similar to:
 # ${GOPATH}/src/github.com/someone/someproject/some.proto
 
